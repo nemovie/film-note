@@ -1914,6 +1914,17 @@ window.deleteCurrentRecord = async function() {
       if (yearMatch) targetYear = yearMatch[0];
     }
 
+    // TMDB/KMDB 검색 결과가 실제로 찾는 영화가 맞는지 검증할 때 쓰는 헬퍼.
+    // 공백/특수문자/HTML태그를 다 지우고 비교해서, 사소한 표기 차이는 무시하되
+    // 완전히 다른 제목(예: 킹스맨 vs 시크릿 에이전트)은 걸러냄.
+    const normalizeForMatch = (str) => (str || '').replace(/<[^>]+>/g, '').replace(/[^a-zA-Z0-9가-힣]/g, '').toLowerCase();
+    const isTitleLikelyMatch = (candidateTitle, searchTitle) => {
+      const a = normalizeForMatch(candidateTitle);
+      const b = normalizeForMatch(searchTitle);
+      if (!a || !b) return false;
+      return a.includes(b) || b.includes(a);
+    };
+
     // [수정점 2] 아비정전 등 리마스터 영화 수거를 위한 영화 제목 정제함수
     const cleanMovieTitle = (title) => {
       if (!title) return '';
@@ -1972,15 +1983,28 @@ window.deleteCurrentRecord = async function() {
           }
 
           if (data.results && data.results.length > 0) {
+            // 제목이 실제로 비슷한 후보만 남김. TMDB 검색이 가끔 검색어랑 별
+            // 상관없는 유명한 영화를 결과에 끼워주는 경우가 있는데(예: "시크릿
+            // 에이전트"로 검색했는데 "킹스맨"이 나오는 등), 이걸 그냥 포스터 있는
+            // 첫 결과로 받아버리면 완전히 다른 영화 포스터가 붙는 사고가 남.
+            const plausible = data.results.filter(r =>
+              isTitleLikelyMatch(r.title, cleanedSearchTitle) ||
+              isTitleLikelyMatch(r.original_title, cleanedSearchTitle) ||
+              isTitleLikelyMatch(r.title, movieNm) ||
+              isTitleLikelyMatch(r.original_title, movieNm)
+            );
+
             let matchedResult = null;
-            // 1순위: 포스터가 존재하고 연도가 일치하는 영화
+            // 1순위: 제목도 비슷하고 포스터도 있고 연도도 일치하는 영화
             if (targetYear) {
-              matchedResult = data.results.find(r => r.poster_path && r.release_date && r.release_date.startsWith(targetYear));
+              matchedResult = plausible.find(r => r.poster_path && r.release_date && r.release_date.startsWith(targetYear));
             }
-            // 2순위: 연도 불일치 시에도 포스터가 존재하는 결과 선택
+            // 2순위: 연도 불일치 시에도 제목이 비슷하고 포스터가 존재하는 결과 선택
             if (!matchedResult) {
-              matchedResult = data.results.find(r => r.poster_path) || data.results[0];
+              matchedResult = plausible.find(r => r.poster_path) || plausible[0] || null;
             }
+            // 제목이 비슷한 후보가 하나도 없으면 그냥 못 찾은 걸로 처리
+            // (엉뚱한 영화 포스터를 붙이느니 기본 포스터가 나음 — 아래 KMDB 폴백으로 이어짐)
 
             if (matchedResult && matchedResult.poster_path) {
               posterUrl = `https://image.tmdb.org/t/p/w780${matchedResult.poster_path}`;
@@ -2003,7 +2027,10 @@ window.deleteCurrentRecord = async function() {
               const kmdbUrl = `https://api.koreafilm.or.kr/openapi-data2/wisenut/search_api/search_json2.jsp?collection=kmdb_new2&detail=Y&query=${encodeURIComponent(kmdbQuery)}&ServiceKey=${KMDB_KEY}`;
               const kRes = await fetch(kmdbUrl);
               const kData = await kRes.json();
-              const kResults = kData?.Data?.[0]?.Result || [];
+              const kAllResults = kData?.Data?.[0]?.Result || [];
+
+              // 여기도 TMDB와 같은 이유로 제목이 실제로 비슷한 결과만 후보로 남김
+              const kResults = kAllResults.filter(r => isTitleLikelyMatch(r.title, movieNm));
 
               // 1순위: 포스터가 있고 제작연도가 일치하는 결과, 2순위: 포스터만 있으면 첫 결과
               let kMatch = null;
