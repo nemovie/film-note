@@ -942,7 +942,7 @@
   // 체인별 상영관(특별관) 종류. 순서는 화면에 보여줄 순서.
   const SCREEN_TYPES_BY_CHAIN = {
     'CGV': ['일반', '리클라이너', '아트하우스', 'IMAX', '4DX', 'ScreenX', 'Ultra 4DX'],
-    '롯데시네마': ['일반', '리클라이너', '광음시네마', 'SUPERPLEX', 'SLED', 'MX4D'],
+    '롯데시네마': ['일반', '리클라이너', '광음시네마', 'SUPERPLEX', 'SLED', 'MX4D', 'ARTE'],
     '메가박스': ['컴포트', '르 리클라이너', 'DOLBY CINEMA', 'DOLBY VISION + ATMOS', 'DOLBY ATMOS', 'MX4D', 'The Boutique', '일반'],
     'CineQ': ['일반', 'RESERVE', 'SUITE', '씨네필', '리클라이너']
   };
@@ -1144,6 +1144,7 @@
     { match: '4DX', aliases: ['포디'] },   // 'Ultra 4DX'에도 '4DX'가 포함돼있어서 같이 걸림
     { match: 'MX4D', aliases: ['포디'] },
     { match: 'ScreenX', aliases: ['스엑', '스크린엑스'] }
+    { match: 'ARTE', aliases: ['아르떼'] }
   ];
 
   function buildSearchBlob(log) {
@@ -1178,12 +1179,16 @@
 
     container.innerHTML = matched.map(log => {
       const poster = posterAt(log.poster || DEFAULT_POSTER, 'w185');
+      const { screenExtra, seat } = splitSeatInfo(log.seatNumber);
+      const screenLabel = screenExtra ? `${log.screenType || ''} ${screenExtra}`.trim() : (log.screenType || '');
+      const screenSeatLine = [screenLabel, seat].filter(Boolean).join(' · ');
       return `
         <div class="movie-item-card" onclick="window.goToSearchResult('${log.date}', '${log.id}')">
           <img src="${poster}" class="item-poster" loading="lazy" decoding="async" onerror="this.onerror=null; this.src='${DEFAULT_POSTER}';">
           <div class="item-info">
             <div class="item-title">${log.title}</div>
             <div class="item-sub">${log.date} · ${log.cinema || '영화관 미입력'}</div>
+            ${screenSeatLine ? `<div class="item-sub">${screenSeatLine}</div>` : ''}
           </div>
         </div>
       `;
