@@ -1133,7 +1133,7 @@
   // 영화관/상영관 문자열에 왼쪽 키워드가 포함돼있으면, 검색용 텍스트에
   // 오른쪽 별칭들을 몰래 덧붙여서 그 별칭으로 검색해도 걸리게 함.
   const SEARCH_ALIASES = [
-    { match: 'CGV', aliases: ['시지브이', '시지비'] },
+    { match: 'CGV', aliases: ['시지브이', '시지비', '시집', '씨집', '씨지비', '씨지브이'] },
     { match: '롯데시네마', aliases: ['롯시'] },
     { match: '메가박스', aliases: ['메박'] },
     { match: 'IMAX', aliases: ['아이맥스', '아맥'] },
@@ -1145,6 +1145,7 @@
     { match: 'MX4D', aliases: ['포디'] },
     { match: 'ScreenX', aliases: ['스엑', '스크린엑스'] },
     { match: 'DOLBY VISION + ATMOS', aliases: ['디바'] },
+    { match: 'SUPERPLEX', aliases: ['수플', '슈플', '수퍼플렉스', '슈퍼플렉스'] },
     { match: 'ARTE', aliases: ['아르떼'] }
   ];
 
