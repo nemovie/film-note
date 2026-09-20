@@ -599,7 +599,7 @@
       <div class="screen-input-row">
         <select class="input-box" id="screenType">
         </select>
-        <input type="text" class="input-box" id="seatNumber" placeholder="관/좌석 (예: 8관 H12)" autocomplete="off">
+        <input type="text" class="input-box" id="seatNumber" placeholder="관/좌석 (선택, 예: 8관 H12)" autocomplete="off">
       </div>
     </div>
 
@@ -634,7 +634,7 @@
       <button class="close-btn" onclick="window.closeModal('searchModal')">&times;</button>
     </div>
     <div class="form-group" style="margin-bottom: 14px;">
-      <input type="text" class="input-box" id="searchInput" placeholder="영화 제목으로 검색..." autocomplete="off" oninput="window.handleSearchInput(this.value)">
+      <input type="text" class="input-box" id="searchInput" placeholder="영화 제목, 영화관, 상영관으로 검색..." autocomplete="off" oninput="window.handleSearchInput(this.value)">
     </div>
     <div id="searchResultsContainer"></div>
   </div>
@@ -942,7 +942,7 @@
   // 체인별 상영관(특별관) 종류. 순서는 화면에 보여줄 순서.
   const SCREEN_TYPES_BY_CHAIN = {
     'CGV': ['일반', '리클라이너', '아트하우스', 'IMAX', '4DX', 'ScreenX', 'Ultra 4DX'],
-    '롯데시네마': ['일반', '리클라이너', '광음시네마', 'SUPERPLEX', 'SLED', 'MX4D', '아르떼'],
+    '롯데시네마': ['일반', '리클라이너', '광음시네마', 'SUPERPLEX', 'SLED', 'MX4D'],
     '메가박스': ['컴포트', '르 리클라이너', 'DOLBY CINEMA', 'DOLBY VISION + ATMOS', 'DOLBY ATMOS', 'MX4D', 'The Boutique'],
     'CineQ': ['일반', 'RESERVE', 'SUITE', '씨네필', '리클라이너']
   };
@@ -1124,10 +1124,38 @@
   window.openSearchModal = async function() {
     if (!(await requireLogin())) return;
     document.getElementById('searchInput').value = '';
-    document.getElementById('searchResultsContainer').innerHTML = '<div class="search-result-empty">영화 제목을 입력해보세요</div>';
+    document.getElementById('searchResultsContainer').innerHTML = '<div class="search-result-empty">영화 제목, 영화관, 상영관을 입력해보세요</div>';
     document.getElementById('searchModal').style.display = 'flex';
     setTimeout(() => document.getElementById('searchInput').focus(), 50);
   };
+
+  // 영어/브랜드명을 한글 약칭으로도 검색할 수 있게 하는 별칭 테이블.
+  // 영화관/상영관 문자열에 왼쪽 키워드가 포함돼있으면, 검색용 텍스트에
+  // 오른쪽 별칭들을 몰래 덧붙여서 그 별칭으로 검색해도 걸리게 함.
+  const SEARCH_ALIASES = [
+    { match: 'CGV', aliases: ['시지브이', '시지비'] },
+    { match: '롯데시네마', aliases: ['롯시'] },
+    { match: '메가박스', aliases: ['메박'] },
+    { match: 'IMAX', aliases: ['아이맥스', '아맥'] },
+    { match: 'DOLBY', aliases: ['돌비'] },
+    { match: 'The Boutique', aliases: ['부티크'] },
+    { match: 'RESERVE', aliases: ['리저브'] },
+    { match: 'SUITE', aliases: ['수트'] },
+    { match: '4DX', aliases: ['포디'] },   // 'Ultra 4DX'에도 '4DX'가 포함돼있어서 같이 걸림
+    { match: 'MX4D', aliases: ['포디'] },
+    { match: 'ScreenX', aliases: ['스엑', '스크린엑스'] }
+  ];
+
+  function buildSearchBlob(log) {
+    let blob = [log.title, log.cinema, log.screenType].map(v => (v || '').toString()).join(' ');
+    const upperBlob = blob.toUpperCase();
+    SEARCH_ALIASES.forEach(({ match, aliases }) => {
+      if (upperBlob.includes(match.toUpperCase())) {
+        blob += ' ' + aliases.join(' ');
+      }
+    });
+    return blob.toLowerCase().replace(/\s+/g, '');
+  }
 
   window.handleSearchInput = function(val) {
     // 띄어쓰기 유무 때문에 검색이 안 되는 문제 방지 (예: "가능한사랑"으로 검색해도 "가능한 사랑" 찾아지게)
@@ -1135,12 +1163,12 @@
     const container = document.getElementById('searchResultsContainer');
 
     if (!query) {
-      container.innerHTML = '<div class="search-result-empty">영화 제목을 입력해보세요</div>';
+      container.innerHTML = '<div class="search-result-empty">영화 제목, 영화관, 상영관을 입력해보세요</div>';
       return;
     }
 
     const matched = movieLogs
-      .filter(l => (l.title || '').toLowerCase().replace(/\s+/g, '').includes(query))
+      .filter(l => buildSearchBlob(l).includes(query))
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
     if (matched.length === 0) {
