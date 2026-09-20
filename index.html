@@ -1995,12 +1995,15 @@ window.deleteCurrentRecord = async function() {
             );
 
             let matchedResult = null;
-            // 1순위: 제목도 비슷하고 포스터도 있고 연도도 일치하는 영화
             if (targetYear) {
+              // 연도를 알고 있으면 반드시 그 연도까지 일치해야만 인정함.
+              // "제목만 비슷하면 연도 무시하고 아무거나" 식으로 넘어가면, 부제만
+              // 우연히 똑같은 완전히 다른 영화(예: 2026년작 "시크릿 에이전트" vs
+              // 2015년작 "킹스맨: 시크릿 에이전트")를 잘못 가져오는 사고가 남.
+              // 이 경우엔 그냥 못 찾은 걸로 처리하고 아래 KMDB 폴백으로 넘김.
               matchedResult = plausible.find(r => r.poster_path && r.release_date && r.release_date.startsWith(targetYear));
-            }
-            // 2순위: 연도 불일치 시에도 제목이 비슷하고 포스터가 존재하는 결과 선택
-            if (!matchedResult) {
+            } else {
+              // 연도 정보 자체가 없을 때만, 제목 유사도만 보고 포스터 있는 후보를 받아들임
               matchedResult = plausible.find(r => r.poster_path) || plausible[0] || null;
             }
             // 제목이 비슷한 후보가 하나도 없으면 그냥 못 찾은 걸로 처리
@@ -2032,12 +2035,11 @@ window.deleteCurrentRecord = async function() {
               // 여기도 TMDB와 같은 이유로 제목이 실제로 비슷한 결과만 후보로 남김
               const kResults = kAllResults.filter(r => isTitleLikelyMatch(r.title, movieNm));
 
-              // 1순위: 포스터가 있고 제작연도가 일치하는 결과, 2순위: 포스터만 있으면 첫 결과
+              // 연도를 알고 있으면 반드시 그 연도까지 일치해야만 인정함 (이유는 위 TMDB 쪽과 동일)
               let kMatch = null;
               if (targetYear) {
                 kMatch = kResults.find(r => r.posters && r.prodYear === targetYear);
-              }
-              if (!kMatch) {
+              } else {
                 kMatch = kResults.find(r => r.posters);
               }
 
