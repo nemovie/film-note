@@ -599,7 +599,7 @@
       <div class="screen-input-row">
         <select class="input-box" id="screenType">
         </select>
-        <input type="text" class="input-box" id="seatNumber" placeholder="좌석번호 (예: G12)" autocomplete="off">
+        <input type="text" class="input-box" id="seatNumber" placeholder="관/좌석 (예: 8관 H12)" autocomplete="off">
       </div>
     </div>
 
@@ -942,7 +942,7 @@
   // 체인별 상영관(특별관) 종류. 순서는 화면에 보여줄 순서.
   const SCREEN_TYPES_BY_CHAIN = {
     'CGV': ['일반', '리클라이너', '아트하우스', 'IMAX', '4DX', 'ScreenX', 'Ultra 4DX'],
-    '롯데시네마': ['일반', '리클라이너', '광음시네마', 'SUPERPLEX', 'SLED', 'MX4D'],
+    '롯데시네마': ['일반', '리클라이너', '광음시네마', 'SUPERPLEX', 'SLED', 'MX4D', '아르떼'],
     '메가박스': ['컴포트', '르 리클라이너', 'DOLBY CINEMA', 'DOLBY VISION + ATMOS', 'DOLBY ATMOS', 'MX4D', 'The Boutique'],
     'CineQ': ['일반', 'RESERVE', 'SUITE', '씨네필', '리클라이너']
   };
@@ -1488,6 +1488,19 @@
     document.getElementById('listModal').style.display = 'flex';
   };
 
+  // 좌석번호 칸에 "8관 H12"처럼 관 번호를 앞에 같이 적어두면, 상세보기에서
+  // "N관" 부분만 떼어내 상영관 줄에 붙이고 나머지(좌석)만 좌석 줄에 보여줌.
+  // 특별관은 극장에 보통 하나뿐이라 관 번호가 필요 없고, 일반관만 이렇게
+  // 적으면 되므로 별도 입력칸을 만들지 않고 이 규칙으로 처리함.
+  function splitSeatInfo(seatRaw) {
+    const str = (seatRaw || '').trim();
+    const match = str.match(/^(\d+관)\s*(.*)$/);
+    if (match) {
+      return { screenExtra: match[1], seat: match[2].trim() };
+    }
+    return { screenExtra: '', seat: str };
+  }
+
   window.openDetailModal = function(id) {
     const record = movieLogs.find(l => String(l.id) === String(id));
     if (!record) return;
@@ -1520,8 +1533,11 @@
     document.getElementById('detailTitle').innerText = record.title;
     document.getElementById('detailDate').innerText = record.date;
     document.getElementById('detailCinema').innerText = record.cinema || '정보 없음';
-    document.getElementById('detailScreenType').innerText = record.screenType || '정보 없음';
-    document.getElementById('detailSeat').innerText = record.seatNumber || '정보 없음';
+    const { screenExtra, seat } = splitSeatInfo(record.seatNumber);
+    document.getElementById('detailScreenType').innerText = screenExtra
+      ? `${record.screenType || '정보 없음'} ${screenExtra}`
+      : (record.screenType || '정보 없음');
+    document.getElementById('detailSeat').innerText = seat || '정보 없음';
     
     const timeStr = (record.startTime || record.endTime) ? `${record.startTime || ''} ~ ${record.endTime || ''}` : '정보 없음';
     document.getElementById('detailTime').innerText = timeStr;
