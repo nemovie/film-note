@@ -302,6 +302,13 @@
     .cinema-input-row { display: flex; gap: 8px; }
     .cinema-input-row .input-box { flex: 1; min-width: 0; }
     .cinema-input-row select.input-box { flex: 0 0 38%; background: #fff; }
+
+    /* 상영관 종류 + 좌석번호 줄: "DOLBY VISION + ATMOS" 같은 긴 이름이 있어서
+       체인 선택줄(38%)보다 훨씬 넓게 줌. 좌석번호는 짧게 쓰니 나머지를 씀. */
+    .screen-input-row { display: flex; gap: 8px; }
+    .screen-input-row .input-box { min-width: 0; }
+    .screen-input-row select.input-box { flex: 0 0 58%; background: #fff; }
+    .screen-input-row input.input-box { flex: 1; }
     
     .autocomplete-list {
       position: absolute; top: 100%; left: 0; right: 0;
@@ -514,6 +521,8 @@
       <div class="detail-card">
         <div class="detail-row"><span class="detail-label">관람 날짜</span><span id="detailDate" class="detail-val"></span></div>
         <div class="detail-row"><span class="detail-label">영화관</span><span id="detailCinema" class="detail-val"></span></div>
+        <div class="detail-row"><span class="detail-label">상영관</span><span id="detailScreenType" class="detail-val">정보 없음</span></div>
+        <div class="detail-row"><span class="detail-label">좌석</span><span id="detailSeat" class="detail-val">정보 없음</span></div>
         <div class="detail-row"><span class="detail-label">상영 시간</span><span id="detailTime" class="detail-val"></span></div>
         <div class="detail-row"><span class="detail-label">총 상영시간</span><span id="detailDuration" class="detail-val"></span></div>
         <div class="detail-row"><span class="detail-label">티켓 가격</span><span id="detailPrice" class="detail-val">0원</span></div>
@@ -547,6 +556,7 @@
     <input type="hidden" id="directorVal">
     <input type="hidden" id="actorsVal">
     <input type="hidden" id="posterUrlVal">
+    <input type="hidden" id="runtimeMinVal">
     
     <div class="form-group">
       <label>영화 제목</label>
@@ -581,6 +591,15 @@
           <span class="time-colon">:</span>
           <input type="text" id="endM" class="time-num-input" placeholder="00" maxlength="2" autocomplete="off" oninput="window.handleTimeInput(this, null)">
         </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>상영관 / 좌석</label>
+      <div class="screen-input-row">
+        <select class="input-box" id="screenType">
+        </select>
+        <input type="text" class="input-box" id="seatNumber" placeholder="좌석번호 (예: G12)" autocomplete="off">
       </div>
     </div>
 
@@ -875,6 +894,10 @@
   // 저장 시 이 조회가 끝났는지 확인할 수 있도록 진행 중인 Promise를 보관해둠.
   let pendingMetaFetch = null;
 
+  // 종영 시간을 사용자가 직접 손댔는지 추적. true면 러닝타임 자동계산이 그 값을
+  // 덮어쓰지 않음 (예: 언택트톡, GV 등으로 종영 시간이 늘어난 경우 수동 유지)
+  let endTimeUserEdited = false;
+
   // ===================== 영화관 체인 / 프로모션 옵션 =====================
   const CINEMA_CHAINS = ['CGV', '롯데시네마', '메가박스', 'CineQ'];
 
@@ -916,9 +939,44 @@
     select.value = preserveValue && options.includes(preserveValue) ? preserveValue : '없음';
   }
 
+  // 체인별 상영관(특별관) 종류. 순서는 화면에 보여줄 순서.
+  const SCREEN_TYPES_BY_CHAIN = {
+    'CGV': ['일반', '리클라이너', '아트하우스', 'IMAX', '4DX', 'ScreenX', 'Ultra 4DX'],
+    '롯데시네마': ['일반', '리클라이너', '광음시네마', 'SUPERPLEX', 'SLED', 'MX4D'],
+    '메가박스': ['컴포트', '르 리클라이너', 'DOLBY CINEMA', 'DOLBY VISION + ATMOS', 'DOLBY ATMOS', 'MX4D', 'The Boutique'],
+    'CineQ': ['일반', 'RESERVE', 'SUITE', '씨네필', '리클라이너']
+  };
+
+  // 체인마다 "기본으로 선택돼있을" 상영관. 메가박스는 목록에 "일반"이 없고
+  // "컴포트"가 가장 기본 관이라 별도로 지정해둠.
+  const DEFAULT_SCREEN_TYPE_BY_CHAIN = {
+    'CGV': '일반',
+    '롯데시네마': '일반',
+    '메가박스': '컴포트',
+    'CineQ': '일반'
+  };
+
+  // 선택된 체인에 맞는 상영관 옵션을 select에 채워 넣음.
+  // preserveValue가 그 체인의 목록에 없는 값이면(예: 극장이 리브랜딩해서 이름이
+  // 바뀌기 전 옛날 기록) 목록에 추가해서 값이 사라지지 않도록 함.
+  // preserveValue가 없으면(체인을 새로 고른 경우) 그 체인의 기본 상영관으로 맞춤.
+  function renderScreenTypeOptions(chain, preserveValue) {
+    const select = document.getElementById('screenType');
+    const options = (SCREEN_TYPES_BY_CHAIN[chain] || SCREEN_TYPES_BY_CHAIN['CGV']).slice();
+    const defaultVal = DEFAULT_SCREEN_TYPE_BY_CHAIN[chain] || options[0];
+
+    if (preserveValue && !options.includes(preserveValue)) {
+      options.push(preserveValue);
+    }
+
+    select.innerHTML = options.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+    select.value = preserveValue && options.includes(preserveValue) ? preserveValue : defaultVal;
+  }
+
   window.handleChainChange = function() {
     const chain = document.getElementById('cinemaChain').value;
     renderPromotionOptions(chain, '없음');
+    renderScreenTypeOptions(chain, null);
   };
 
   (function restoreCachedUser() {
@@ -1209,6 +1267,23 @@
       }));
   }
 
+  // 연말결산 "특별관 관람 횟수" 집계용.
+  // 일반석 성격의 등급(일반/리클라이너/컴포트/르 리클라이너)은 "특별관"이 아니니 제외.
+  // 4DX 계열(CGV의 4DX·Ultra 4DX, 롯데/메가박스의 MX4D)은 같은 체감형 포맷이라 하나로 합산.
+  const SCREEN_TYPE_EXCLUDE = new Set(['일반', '리클라이너', '컴포트', '르 리클라이너']);
+  const SCREEN_TYPE_MERGE = { '4DX': '4DX', 'Ultra 4DX': '4DX', 'MX4D': '4DX' };
+
+  function specialScreenCounts(logs) {
+    const counts = {};
+    logs.forEach(l => {
+      const raw = (l.screenType || '').trim();
+      if (!raw || SCREEN_TYPE_EXCLUDE.has(raw)) return;
+      const key = SCREEN_TYPE_MERGE[raw] || raw;
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  }
+
   function renderStatRows(containerId, entries, unit) {
     const container = document.getElementById(containerId);
     if (entries.length === 0) {
@@ -1283,6 +1358,7 @@
 
     const topDirectors = topCounts(yearLogs, 'director', 3);
     const topCinemas = topCinemaCounts(yearLogs, 3);
+    const specialScreens = specialScreenCounts(yearLogs);
     const promoData = promotionBreakdown(yearLogs);
 
     content.innerHTML = `
@@ -1332,6 +1408,16 @@
             <span class="stat-count">${cnt}번</span>
           </div>
         `).join('') : '<div class="empty-stat">영화관 정보가 있는 기록이 없어요</div>'}
+      </div>
+
+      <div class="stat-block">
+        <div class="stat-block-title">🎇 특별관 관람 횟수 <span class="stat-block-note">(일반/리클라이너/컴포트 제외, 4DX 계열 합산)</span></div>
+        ${specialScreens.length ? specialScreens.map(([name, cnt], i) => `
+          <div class="stat-row">
+            <span><span class="stat-rank">${i + 1}</span><span class="stat-name">${name}</span></span>
+            <span class="stat-count">${cnt}번</span>
+          </div>
+        `).join('') : '<div class="empty-stat">특별관 관람 기록이 없어요</div>'}
       </div>
 
       <div class="stat-block">
@@ -1434,6 +1520,8 @@
     document.getElementById('detailTitle').innerText = record.title;
     document.getElementById('detailDate').innerText = record.date;
     document.getElementById('detailCinema').innerText = record.cinema || '정보 없음';
+    document.getElementById('detailScreenType').innerText = record.screenType || '정보 없음';
+    document.getElementById('detailSeat').innerText = record.seatNumber || '정보 없음';
     
     const timeStr = (record.startTime || record.endTime) ? `${record.startTime || ''} ~ ${record.endTime || ''}` : '정보 없음';
     document.getElementById('detailTime').innerText = timeStr;
@@ -1522,6 +1610,8 @@
     }
 
     renderPromotionOptions(chain, record.promotion || '없음');
+    renderScreenTypeOptions(chain, record.screenType || null);
+    document.getElementById('seatNumber').value = record.seatNumber || '';
     document.getElementById('posterUrlVal').value = record.poster || DEFAULT_POSTER;
 
     if (record.startTime && record.startTime.includes(':')) {
@@ -1544,6 +1634,10 @@
 
     document.getElementById('openDtVal').value = record.openDt || '';
     document.getElementById('directorVal').value = record.director || '';
+    document.getElementById('runtimeMinVal').value = '';
+    // 이미 저장된 기록을 여는 것이므로, 나중에 영화를 다시 골라 러닝타임이
+    // 새로 조회되더라도 기존에 입력해둔 종영 시간을 자동계산이 덮어쓰지 않게 함
+    endTimeUserEdited = true;
     pendingMetaFetch = null;
     document.getElementById('actorsVal').value = record.actors || '';
     
@@ -1621,6 +1715,8 @@ window.deleteCurrentRecord = async function() {
     document.getElementById('cinemaChain').value = 'CGV';
     document.getElementById('cinemaBranch').value = '';
     renderPromotionOptions('CGV', '없음');
+    renderScreenTypeOptions('CGV', null);
+    document.getElementById('seatNumber').value = '';
     document.getElementById('ticketPrice').value = '';
     document.getElementById('startH').value = '';
     document.getElementById('startM').value = '';
@@ -1632,6 +1728,8 @@ window.deleteCurrentRecord = async function() {
     document.getElementById('directorVal').value = '';
     document.getElementById('actorsVal').value = '';
     document.getElementById('posterUrlVal').value = DEFAULT_POSTER;
+    document.getElementById('runtimeMinVal').value = '';
+    endTimeUserEdited = false; // 새 기록이니 자동계산이 다시 작동하게 초기화
     pendingMetaFetch = null;
     hideAutoComplete();
     
@@ -1785,9 +1883,15 @@ window.deleteCurrentRecord = async function() {
           const detailUrl = `https://kobis.or.kr/kobisopenapi/webservice/rest/movie/searchMovieInfo.json?key=${KOFIC_KEY}&movieCd=${movieCd}`;
           const res = await fetch(detailUrl);
           const data = await res.json();
-          const actorList = data.movieInfoResult?.movieInfo?.actors || [];
+          const movieInfo = data.movieInfoResult?.movieInfo;
+          const actorList = movieInfo?.actors || [];
           if (actorList.length > 0) {
             actors = actorList.slice(0, 3).map(a => a.peopleNm).join(', ');
+          }
+          // 상영시간(분)도 이 응답에 같이 들어있어서(showTm), 별도 API 호출 없이
+          // 여기서 바로 가져다 씀 — TMDB(해외 DB)보다 국내 상영본 기준이라 더 정확함
+          if (movieInfo?.showTm) {
+            document.getElementById('runtimeMinVal').value = movieInfo.showTm;
           }
         } catch (e) {
           console.error("배우 정보 조회 실패:", e);
@@ -1894,6 +1998,9 @@ window.deleteCurrentRecord = async function() {
     document.getElementById('actorsVal').value = actors;
     document.getElementById('posterUrlVal').value = posterUrl;
     document.getElementById('movieMetaPreview').value = `개봉: ${openDt} | 감독: ${director} | 출연: ${actors}`;
+
+    // 영화를 시작 시간 입력 "이후"에 고른 경우를 위해, 여기서도 한 번 시도함
+    autoFillEndTimeFromRuntime();
   }
 
   function hideAutoComplete() {
@@ -1905,8 +2012,43 @@ window.deleteCurrentRecord = async function() {
     if (input.value.length === 2 && nextId) {
       document.getElementById(nextId).focus();
     }
+
+    if (input.id === 'endH' || input.id === 'endM') {
+      // 종영 시간을 사용자가 직접 건드림 → 이후로는 자동계산이 이 값을 덮어쓰지 않음
+      // (언택트톡, GV 등으로 종영 시간이 러닝타임보다 늘어난 경우 그대로 유지하기 위함)
+      endTimeUserEdited = true;
+    } else {
+      // 시작 시간이 바뀐 경우: 아직 종영 시간을 직접 수정한 적 없다면 다시 자동계산
+      autoFillEndTimeFromRuntime();
+    }
     calcDuration();
   };
+
+  // "시작 시간 + 광고 10분 + 러닝타임"으로 종영 시간을 자동으로 채움.
+  // 시작 시간이 없거나, 러닝타임을 못 구했거나, 사용자가 종영 시간을 이미
+  // 직접 수정했으면 아무것도 하지 않음(수동 입력을 절대 덮어쓰지 않음).
+  function autoFillEndTimeFromRuntime() {
+    if (endTimeUserEdited) return;
+
+    const runtime = parseInt(document.getElementById('runtimeMinVal').value, 10);
+    if (!runtime || isNaN(runtime)) return;
+
+    const sH = parseInt(document.getElementById('startH').value, 10);
+    const sM = parseInt(document.getElementById('startM').value, 10) || 0;
+    if (isNaN(sH)) return;
+
+    const AD_MINUTES = 10; // 광고/예고편 시간
+    // 자정을 넘기면 0시로 순환시키지 않고 25시, 26시처럼 이어서 표기함
+    // (극장/영수증 표기 관례랑 같게, 그리고 시작-종영 순서가 뒤바뀌어 보이는 걸 방지)
+    const endTotal = sH * 60 + sM + AD_MINUTES + runtime;
+
+    const eH = Math.floor(endTotal / 60);
+    const eM = endTotal % 60;
+
+    document.getElementById('endH').value = String(eH).padStart(2, '0');
+    document.getElementById('endM').value = String(eM).padStart(2, '0');
+    calcDuration();
+  }
 
   function calcDuration() {
     const sH = parseInt(document.getElementById('startH').value, 10);
@@ -1989,6 +2131,8 @@ window.deleteCurrentRecord = async function() {
       date: date,
       title: title,
       cinema: cinema,
+      screenType: document.getElementById('screenType').value,
+      seatNumber: document.getElementById('seatNumber').value.trim(),
       ticketPrice: parsedPrice,
       promotion: document.getElementById('promotion').value,
       startTime: startTime,
