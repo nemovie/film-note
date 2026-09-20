@@ -1962,112 +1962,112 @@ window.deleteCurrentRecord = async function() {
 
       (async () => {
         try {
-          // 1차 검색: 정제된 제목 + 개봉 연도 조합
-          let yearParam = targetYear ? `&primary_release_year=${targetYear}&year=${targetYear}` : '';
-          let tmdbUrl = `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_KEY}&language=ko-KR&query=${encodeURIComponent(cleanedSearchTitle)}${yearParam}`;
+          // 이 함수 하나로 KMDB 검색 결과 하나를 실제 posterUrl에 반영함
+          // (고화질 URL 변환 시도 로직 포함). 여러 단계에서 재사용하려고 분리함.
+          const applyKmdbPoster = async (kMatch) => {
+            if (!kMatch || !kMatch.posters) return false;
+            const firstPoster = kMatch.posters.split('|')[0].trim();
+            if (!firstPoster) return false;
+            const thumbUrl = firstPoster.replace(/^http:\/\//, 'https://');
+
+            // KMDB가 응답으로 주는 posters URL은 썸네일(tn_*)뿐인데, 경로/파일명
+            // 규칙상 "/thm/NN/.../tn_이름.jpg" → "/poster/.../이름_01.jpg" 로 바꾸면
+            // 고화질본일 가능성이 있음(확실히 검증은 못 했고, 파일마다 규칙이
+            // 다를 수도 있음). 그래서 이 URL이 실제로 뜨는지 먼저 확인해보고,
+            // 성공하면 고화질을, 실패하면 원래 썸네일을 그대로 씀.
+            const highResUrl = thumbUrl
+              .replace(/\/thm\/\d+\//, '/poster/')
+              .replace(/tn_([^\/]+)\.(\w+)$/i, '$1_01.$2');
+
+            posterUrl = (highResUrl !== thumbUrl && await tryLoadImage(highResUrl)) ? highResUrl : thumbUrl;
+            return true;
+          };
+
+          // 연도 조건 없이 후보들 중에서 targetYear와 가장 가까운 연도를 가진 걸 고름.
+          // targetYear를 모르면 그냥 첫 번째 후보.
+          const pickClosestByYear = (candidates, getYear) => {
+            if (!candidates.length) return null;
+            if (!targetYear) return candidates[0];
+            let best = null, bestDiff = Infinity;
+            candidates.forEach(c => {
+              const y = parseInt(getYear(c), 10);
+              if (!y) return;
+              const diff = Math.abs(y - parseInt(targetYear, 10));
+              if (diff < bestDiff) { bestDiff = diff; best = c; }
+            });
+            return best || candidates[0];
+          };
+
+          // ===================== 1. TMDB 제목 검색 =====================
+          // 연도 파라미터 없이 검색함 — TMDB 서버가 연도로 걸러버리면, 나중
+          // 단계("연도 무시하고 재시도")에서 쓸 다른 연도 후보 자체가 애초에
+          // 안 들어오는 문제가 있었음. 연도 판단은 전부 우리 쪽에서 함.
+          let tmdbUrl = `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_KEY}&language=ko-KR&query=${encodeURIComponent(cleanedSearchTitle)}`;
           let res = await fetch(tmdbUrl);
           let data = await res.json();
 
-          // 2차 검색: 연도 조건 없이 정제된 제목만으로 재시도 (리마스터는 제작/개봉연도가 엇갈릴 수 있음)
-          if ((!data.results || data.results.length === 0) && yearParam) {
-            tmdbUrl = `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_KEY}&language=ko-KR&query=${encodeURIComponent(cleanedSearchTitle)}`;
-            res = await fetch(tmdbUrl);
-            data = await res.json();
-          }
-
-          // 3차 검색: 정제 전 원본 제목 검색 fallback
           if ((!data.results || data.results.length === 0) && cleanedSearchTitle !== movieNm) {
             tmdbUrl = `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_KEY}&language=ko-KR&query=${encodeURIComponent(movieNm)}`;
             res = await fetch(tmdbUrl);
             data = await res.json();
           }
 
-          if (data.results && data.results.length > 0) {
-            // 제목이 실제로 비슷한 후보만 남김. TMDB 검색이 가끔 검색어랑 별
-            // 상관없는 유명한 영화를 결과에 끼워주는 경우가 있는데(예: "시크릿
-            // 에이전트"로 검색했는데 "킹스맨"이 나오는 등), 이걸 그냥 포스터 있는
-            // 첫 결과로 받아버리면 완전히 다른 영화 포스터가 붙는 사고가 남.
-            const plausible = data.results.filter(r =>
-              isTitleLikelyMatch(r.title, cleanedSearchTitle) ||
-              isTitleLikelyMatch(r.original_title, cleanedSearchTitle) ||
-              isTitleLikelyMatch(r.title, movieNm) ||
-              isTitleLikelyMatch(r.original_title, movieNm)
-            );
+          const tmdbPlausible = (data.results || []).filter(r =>
+            isTitleLikelyMatch(r.title, cleanedSearchTitle) ||
+            isTitleLikelyMatch(r.original_title, cleanedSearchTitle) ||
+            isTitleLikelyMatch(r.title, movieNm) ||
+            isTitleLikelyMatch(r.original_title, movieNm)
+          );
 
-            let matchedResult = null;
-            if (targetYear) {
-              // 연도를 알고 있으면 반드시 그 연도까지 일치해야만 인정함.
-              // "제목만 비슷하면 연도 무시하고 아무거나" 식으로 넘어가면, 부제만
-              // 우연히 똑같은 완전히 다른 영화(예: 2026년작 "시크릿 에이전트" vs
-              // 2015년작 "킹스맨: 시크릿 에이전트")를 잘못 가져오는 사고가 남.
-              // 이 경우엔 그냥 못 찾은 걸로 처리하고 아래 KMDB 폴백으로 넘김.
-              matchedResult = plausible.find(r => r.poster_path && r.release_date && r.release_date.startsWith(targetYear));
-            } else {
-              // 연도 정보 자체가 없을 때만, 제목 유사도만 보고 포스터 있는 후보를 받아들임
-              matchedResult = plausible.find(r => r.poster_path) || plausible[0] || null;
-            }
-            // 제목이 비슷한 후보가 하나도 없으면 그냥 못 찾은 걸로 처리
-            // (엉뚱한 영화 포스터를 붙이느니 기본 포스터가 나음 — 아래 KMDB 폴백으로 이어짐)
+          // ===================== 2. KMDB 제목 검색 =====================
+          // 주의: cleanedSearchTitle이 아니라 movieNm(KOFIC 원본 제목)을 그대로 씀.
+          // "4K 리마스터링", "재개봉" 같은 수식어는 TMDB(국제 DB) 검색을 방해해서
+          // 떼어냈던 거지만, KMDB는 KOFIC과 같은 국내 영화 생태계의 공식 아카이브라
+          // 오히려 그 수식어가 붙은 원래 등록 제목 그대로 검색해야 정확도가 높음.
+          let kAllResults = [];
+          try {
+            const kmdbUrl = `https://api.koreafilm.or.kr/openapi-data2/wisenut/search_api/search_json2.jsp?collection=kmdb_new2&detail=Y&query=${encodeURIComponent(movieNm)}&ServiceKey=${KMDB_KEY}`;
+            const kRes = await fetch(kmdbUrl);
+            const kData = await kRes.json();
+            kAllResults = kData?.Data?.[0]?.Result || [];
+          } catch (e) {
+            console.error("KMDB 검색 실패:", e);
+          }
+          const kmdbPlausible = kAllResults.filter(r => isTitleLikelyMatch(r.title, movieNm));
 
-            if (matchedResult && matchedResult.poster_path) {
-              posterUrl = `https://image.tmdb.org/t/p/w780${matchedResult.poster_path}`;
-            }
+          // ===================== 3. TMDB 안전장치: 제목+연도 정확히 일치 =====================
+          if (targetYear) {
+            const exact = tmdbPlausible.find(r => r.poster_path && r.release_date && r.release_date.startsWith(targetYear));
+            if (exact) posterUrl = `https://image.tmdb.org/t/p/w780${exact.poster_path}`;
           }
 
-          // 4차: TMDB에 끝내 없으면 KMDB(한국영상자료원)에서 마지막으로 시도.
-          // "어벤져스: 엔드게임"이 "어벤져스: 엔드게임 앙코르" 같은 재개봉 제목으로만
-          // KOFIC에 올라와서 TMDB 검색이 걸리지 않는 경우를 보완하기 위함.
-          // TMDB가 이미 찾은 경우엔 이 블록 자체가 실행되지 않으므로 평소 속도엔 영향 없음.
-          //
-          // 주의: 여기서는 cleanedSearchTitle이 아니라 movieNm(KOFIC 원본 제목)을 그대로
-          // 씀. "4K 리마스터링", "재개봉" 같은 수식어는 TMDB(국제 DB) 검색을 방해해서
-          // 떼어냈던 거지만, KMDB는 KOFIC과 같은 국내 영화 생태계의 공식 아카이브라
-          // 오히려 그 수식어가 붙은 원래 등록 제목 그대로 검색해야 그 재개봉판 항목을
-          // 더 정확히 찾아낼 가능성이 높음.
+          // ===================== 4. KMDB 안전장치: 제목+연도(제작연도) 정확히 일치 =====================
+          if (posterUrl === DEFAULT_POSTER && targetYear) {
+            const exact = kmdbPlausible.find(r => r.posters && r.prodYear === targetYear);
+            if (exact) await applyKmdbPoster(exact);
+          }
+
+          // ===================== 5. TMDB: 제목만 일치, 연도 무시(가장 가까운 연도) =====================
           if (posterUrl === DEFAULT_POSTER) {
-            try {
-              const kmdbQuery = movieNm;
-              const kmdbUrl = `https://api.koreafilm.or.kr/openapi-data2/wisenut/search_api/search_json2.jsp?collection=kmdb_new2&detail=Y&query=${encodeURIComponent(kmdbQuery)}&ServiceKey=${KMDB_KEY}`;
-              const kRes = await fetch(kmdbUrl);
-              const kData = await kRes.json();
-              const kAllResults = kData?.Data?.[0]?.Result || [];
+            const withPoster = tmdbPlausible.filter(r => r.poster_path);
+            const best = pickClosestByYear(withPoster, r => r.release_date ? r.release_date.slice(0, 4) : null);
+            if (best) posterUrl = `https://image.tmdb.org/t/p/w780${best.poster_path}`;
+          }
 
-              // 여기도 TMDB와 같은 이유로 제목이 실제로 비슷한 결과만 후보로 남김
-              const kResults = kAllResults.filter(r => isTitleLikelyMatch(r.title, movieNm));
+          // ===================== 6. KMDB: 제목만 일치, 연도 무시(가장 가까운 연도) =====================
+          if (posterUrl === DEFAULT_POSTER) {
+            const withPoster = kmdbPlausible.filter(r => r.posters);
+            const best = pickClosestByYear(withPoster, r => r.prodYear);
+            if (best) await applyKmdbPoster(best);
+          }
 
-              // 연도를 알고 있으면 반드시 그 연도까지 일치해야만 인정함 (이유는 위 TMDB 쪽과 동일)
-              let kMatch = null;
-              if (targetYear) {
-                kMatch = kResults.find(r => r.posters && r.prodYear === targetYear);
-              } else {
-                kMatch = kResults.find(r => r.posters);
-              }
-
-              if (kMatch && kMatch.posters) {
-                const firstPoster = kMatch.posters.split('|')[0].trim();
-                if (firstPoster) {
-                  const thumbUrl = firstPoster.replace(/^http:\/\//, 'https://');
-
-                  // KMDB가 응답으로 주는 posters URL은 썸네일(tn_*)뿐인데, 경로/파일명
-                  // 규칙상 "/thm/NN/.../tn_이름.jpg" → "/poster/.../이름_01.jpg" 로 바꾸면
-                  // 고화질본일 가능성이 있음(확실히 검증은 못 했고, 파일마다 규칙이
-                  // 다를 수도 있음). 그래서 이 URL이 실제로 뜨는지 먼저 확인해보고,
-                  // 성공하면 고화질을, 실패하면 원래 썸네일을 그대로 씀 — 최악의
-                  // 경우에도 지금 수준(썸네일)보다 나빠지진 않음.
-                  const highResUrl = thumbUrl
-                    .replace(/\/thm\/\d+\//, '/poster/')
-                    .replace(/tn_([^\/]+)\.(\w+)$/i, '$1_01.$2');
-
-                  if (highResUrl !== thumbUrl && await tryLoadImage(highResUrl)) {
-                    posterUrl = highResUrl;
-                  } else {
-                    posterUrl = thumbUrl;
-                  }
-                }
-              }
-            } catch (e) {
-              console.error("KMDB 포스터 조회 실패:", e);
-            }
+          // ===================== 7. 최후: KMDB 검색 결과 중 가장 최근 연도 영화 =====================
+          // 제목 유사도까지 다 실패했을 때의 마지막 수단. 제목 일치를 아예 포기하고
+          // "그나마 최근작이 맞을 확률이 높다"는 추측으로 하나 골라 붙임.
+          if (posterUrl === DEFAULT_POSTER) {
+            const anyWithPoster = kAllResults.filter(r => r.posters);
+            const newest = anyWithPoster.slice().sort((a, b) => (parseInt(b.prodYear, 10) || 0) - (parseInt(a.prodYear, 10) || 0))[0];
+            if (newest) await applyKmdbPoster(newest);
           }
         } catch (e) {
           console.error("포스터 조회 실패:", e);
