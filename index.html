@@ -418,17 +418,42 @@
   }
 
   /* 통계/검색 모달 공통 */
-  .stat-block { margin-bottom: 14px; }
-  .stat-block-title { font-weight: 700; font-size: 0.88rem; color: #b58d53; margin-bottom: 8px; }
-  .stat-row {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 7px 0; font-size: 0.85rem; border-bottom: 1px dashed #eee8dc;
+  .stat-block {
+    margin-bottom: 14px; background: #fbf8f2; border: 1px solid #f1e9d8;
+    border-radius: 14px; padding: 14px 16px;
   }
-  .stat-row:last-child { border-bottom: none; }
-  .stat-rank { color: #a39580; font-weight: 700; margin-right: 8px; width: 18px; display: inline-block; }
-  .stat-name { color: #333; font-weight: 600; }
-  .stat-count { color: #b58d53; font-weight: 700; }
-  .empty-stat { color: #999; font-size: 0.82rem; text-align: center; padding: 10px 0; }
+  .stat-block-title {
+    font-weight: 700; font-size: 0.86rem; color: #8a6d3b; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .stat-row {
+    display: flex; align-items: center; gap: 10px; padding: 7px 0;
+  }
+  .stat-row:not(:last-child) { border-bottom: 1px dashed #eee8dc; }
+  .stat-row-simple {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 2px 0; gap: 10px;
+  }
+  .stat-rank-badge {
+    flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.68rem; font-weight: 800; color: #fff; background: #c3b79e;
+  }
+  .stat-rank-badge.r1 { background: linear-gradient(135deg, #f2c96b, #d29a3a); }
+  .stat-rank-badge.r2 { background: linear-gradient(135deg, #d7dbe1, #a9afb9); }
+  .stat-rank-badge.r3 { background: linear-gradient(135deg, #e3b088, #bd7c4d); }
+  .stat-row-body { flex: 1; min-width: 0; }
+  .stat-name { color: #333; font-weight: 600; font-size: 0.85rem; }
+  .stat-count { color: #b58d53; font-weight: 700; font-size: 0.85rem; flex-shrink: 0; }
+  .stat-row-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 5px; }
+  .stat-row-top .stat-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .empty-stat { color: #999; font-size: 0.82rem; text-align: center; padding: 14px 0; }
+
+  .month-summary-card {
+    background: linear-gradient(135deg, #fbf2df, #f5e8ce); border-radius: 14px;
+    padding: 16px; text-align: center; line-height: 1.7; margin-bottom: 14px;
+    font-size: 0.86rem; color: #4a4032;
+  }
 
   .recap-summary-grid {
     display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px;
@@ -441,11 +466,11 @@
 
   .month-bar-chart {
     display: flex; align-items: flex-end; gap: 4px; height: 90px;
-    padding: 8px 4px 0 4px; margin-bottom: 10px; border-bottom: 1px solid #eee8dc;
+    padding: 8px 4px 0 4px; margin-bottom: 4px; border-bottom: 1px solid #eee8dc;
   }
   .month-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
   .month-bar-count { font-size: 0.62rem; font-weight: 700; color: #b58d53; margin-bottom: 3px; min-height: 11px; line-height: 1; }
-  .month-bar-fill { width: 60%; background: #b58d53; border-radius: 3px 3px 0 0; min-height: 2px; }
+  .month-bar-fill { width: 60%; background: linear-gradient(180deg, #d29a3a, #b58d53); border-radius: 3px 3px 0 0; min-height: 2px; }
   .month-bar-label { font-size: 0.65rem; color: #999; margin-top: 4px; }
 
   .promo-row { margin-bottom: 10px; }
@@ -453,8 +478,8 @@
   .promo-row-top { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.82rem; margin-bottom: 4px; }
   .promo-name { color: #333; font-weight: 600; }
   .promo-pct { color: #b58d53; font-weight: 700; font-size: 0.8rem; }
-  .promo-bar-track { background: #f0ebe0; border-radius: 6px; height: 8px; overflow: hidden; }
-  .promo-bar-fill { background: #b58d53; height: 100%; border-radius: 6px; }
+  .promo-bar-track, .stat-bar-track { background: #f0ebe0; border-radius: 6px; height: 7px; overflow: hidden; }
+  .promo-bar-fill, .stat-bar-fill { background: linear-gradient(90deg, #d29a3a, #b58d53); height: 100%; border-radius: 6px; }
 
   .search-result-empty { text-align: center; color: #999; font-size: 0.85rem; padding: 20px 0; }
   </style>
@@ -555,6 +580,7 @@
     <input type="hidden" id="openDtVal">
     <input type="hidden" id="directorVal">
     <input type="hidden" id="actorsVal">
+    <input type="hidden" id="genreVal">
     <input type="hidden" id="posterUrlVal">
     <input type="hidden" id="runtimeMinVal">
     
@@ -644,17 +670,25 @@
 <div class="modal-overlay" id="statsModal">
   <div class="modal-card">
     <div class="modal-header">
-      <h3 id="statsModalTitle">감독 / 영화관 통계</h3>
+      <h3 id="statsModalTitle">이 달의 통계</h3>
       <button class="close-btn" onclick="window.closeModal('statsModal')">&times;</button>
     </div>
 
     <div id="statsMainView">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;">
+        <button class="btn-circle" onclick="window.changeStatsMonth(-1)">&lt;</button>
+        <div id="statsMonthLabel" style="flex:1; text-align:center; font-weight:700; font-size:1.05rem;"></div>
+        <button class="btn-circle" onclick="window.changeStatsMonth(1)">&gt;</button>
+      </div>
+
+      <div id="statsMonthSummary" class="month-summary-card"></div>
+
       <div class="stat-block">
-        <div class="stat-block-title">🎬 많이 본 감독 Top 5 <span class="stat-block-note">(같은 영화 재관람은 1편)</span></div>
-        <div id="directorStatsList"></div>
+        <div class="stat-block-title">🎭 이 달 많이 본 장르 Top 5</div>
+        <div id="genreStatsList"></div>
       </div>
       <div class="stat-block">
-        <div class="stat-block-title">🍿 자주 간 영화관 Top 5</div>
+        <div class="stat-block-title">🍿 이 달 자주 간 영화관 Top 5</div>
         <div id="cinemaStatsList"></div>
       </div>
       <button class="btn-submit" style="background:#b58d53;" onclick="window.openRecapView()">📅 연말결산 보기</button>
@@ -1319,30 +1353,107 @@
     return Object.entries(counts).sort((a, b) => b[1] - a[1]);
   }
 
-  function renderStatRows(containerId, entries, unit) {
-    const container = document.getElementById(containerId);
+  // 순위가 있는 통계 목록(장르/영화관/감독 등)을 배지+막대그래프 형태로 그려줌.
+  // 1~3위는 금/은/동 배지 색으로 강조하고, 막대 길이는 1위 대비 상대값.
+  function renderRankedStatRows(entries, unit) {
     if (entries.length === 0) {
-      container.innerHTML = '<div class="empty-stat">아직 데이터가 없어요</div>';
-      return;
+      return '<div class="empty-stat">아직 데이터가 없어요</div>';
     }
-    container.innerHTML = entries.map(([name, count], i) => `
-      <div class="stat-row">
-        <span><span class="stat-rank">${i + 1}</span><span class="stat-name">${name}</span></span>
-        <span class="stat-count">${count}${unit}</span>
-      </div>
-    `).join('');
+    const maxCount = entries[0][1] || 1;
+    return entries.map(([name, count], i) => {
+      const rankClass = i === 0 ? 'r1' : i === 1 ? 'r2' : i === 2 ? 'r3' : '';
+      const pct = Math.max((count / maxCount) * 100, 8);
+      return `
+        <div class="stat-row">
+          <div class="stat-rank-badge ${rankClass}">${i + 1}</div>
+          <div class="stat-row-body">
+            <div class="stat-row-top">
+              <span class="stat-name">${name}</span>
+              <span class="stat-count">${count}${unit}</span>
+            </div>
+            <div class="stat-bar-track"><div class="stat-bar-fill" style="width:${pct}%;"></div></div>
+          </div>
+        </div>
+      `;
+    }).join('');
   }
+
+  function renderStatRows(containerId, entries, unit) {
+    document.getElementById(containerId).innerHTML = renderRankedStatRows(entries, unit);
+  }
+
+  let statsViewDate = new Date(); // 통계 모달에서 지금 보고 있는 달 (기본은 캘린더가 보여주는 달)
 
   window.openStatsModal = async function() {
     if (!(await requireLogin())) return;
-    renderStatRows('directorStatsList', topCounts(movieLogs, 'director', 5), '편');
-    renderStatRows('cinemaStatsList', topCinemaCounts(movieLogs, 5), '번');
+    statsViewDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    renderMonthStats();
 
-    document.getElementById('statsModalTitle').innerText = '감독 / 영화관 통계';
+    document.getElementById('statsModalTitle').innerText = '이 달의 통계';
     document.getElementById('statsMainView').style.display = 'block';
     document.getElementById('statsRecapView').style.display = 'none';
     document.getElementById('statsModal').style.display = 'flex';
   };
+
+  window.changeStatsMonth = function(delta) {
+    statsViewDate.setMonth(statsViewDate.getMonth() + delta);
+    renderMonthStats();
+  };
+
+  function renderMonthStats() {
+    const year = statsViewDate.getFullYear();
+    const month = statsViewDate.getMonth(); // 0-indexed
+    const ym = `${year}-${String(month + 1).padStart(2, '0')}`;
+
+    const prevMonthDate = new Date(year, month - 1, 1);
+    const prevYm = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}`;
+
+    const thisMonthLogs = movieLogs.filter(l => (l.date || '').startsWith(ym));
+    const lastMonthLogs = movieLogs.filter(l => (l.date || '').startsWith(prevYm));
+
+    document.getElementById('statsMonthLabel').innerText = `${year}년 ${month + 1}월`;
+
+    const summaryEl = document.getElementById('statsMonthSummary');
+
+    if (thisMonthLogs.length === 0) {
+      summaryEl.innerHTML = '이 달에는 아직 관람 기록이 없어요';
+    } else {
+      // 지난달 대비 증감
+      const diff = thisMonthLogs.length - lastMonthLogs.length;
+      let diffLine;
+      if (diff > 0) {
+        diffLine = `지난달보다 <b class="summary-highlight">${diff}편</b> 더 많이 보셨네요! 🎉`;
+      } else if (diff < 0) {
+        diffLine = `지난달보다 <b class="summary-highlight">${Math.abs(diff)}편</b> 적게 보셨어요`;
+      } else {
+        diffLine = `지난달과 똑같은 편수를 보셨어요`;
+      }
+
+      // 하루에 가장 많이 본 날
+      const dayCounts = {};
+      thisMonthLogs.forEach(l => { dayCounts[l.date] = (dayCounts[l.date] || 0) + 1; });
+      const [busiestDate, busiestCount] = Object.entries(dayCounts).sort((a, b) => b[1] - a[1])[0];
+      const busiestDay = parseInt(busiestDate.split('-')[2], 10);
+      const busiestLine = busiestCount > 1
+        ? `가장 많이 보신 날은 <b class="summary-highlight">${month + 1}월 ${busiestDay}일</b>, <b class="summary-highlight">${busiestCount}편</b> 몰아보셨어요!`
+        : `이 달엔 하루에 여러 편 몰아 보신 날은 없었어요`;
+
+      summaryEl.innerHTML = `${diffLine}<br>${busiestLine}`;
+    }
+
+    // 이 달 많이 본 장르 Top 5 (한 기록에 장르가 여러 개면 각각 집계)
+    const genreCounts = {};
+    thisMonthLogs.forEach(l => {
+      (l.genre || '').split(',').map(g => g.trim()).filter(Boolean).forEach(g => {
+        genreCounts[g] = (genreCounts[g] || 0) + 1;
+      });
+    });
+    const topGenres = Object.entries(genreCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    renderStatRows('genreStatsList', topGenres, '편');
+
+    // 이 달 자주 간 영화관 Top 5
+    renderStatRows('cinemaStatsList', topCinemaCounts(thisMonthLogs, 5), '번');
+  }
 
   window.openRecapView = function() {
     const years = [...new Set(movieLogs.map(l => (l.date || '').substring(0, 4)).filter(Boolean))]
@@ -1361,7 +1472,7 @@
   };
 
   window.backToStatsMain = function() {
-    document.getElementById('statsModalTitle').innerText = '감독 / 영화관 통계';
+    document.getElementById('statsModalTitle').innerText = '이 달의 통계';
     document.getElementById('statsMainView').style.display = 'block';
     document.getElementById('statsRecapView').style.display = 'none';
   };
@@ -1427,32 +1538,17 @@
 
       <div class="stat-block">
         <div class="stat-block-title">🎬 이 해의 감독 Top 3 <span class="stat-block-note">(같은 영화 재관람은 1편)</span></div>
-        ${topDirectors.length ? topDirectors.map(([name, cnt], i) => `
-          <div class="stat-row">
-            <span><span class="stat-rank">${i + 1}</span><span class="stat-name">${name}</span></span>
-            <span class="stat-count">${cnt}편</span>
-          </div>
-        `).join('') : '<div class="empty-stat">감독 정보가 있는 기록이 없어요</div>'}
+        ${renderRankedStatRows(topDirectors, '편')}
       </div>
 
       <div class="stat-block">
         <div class="stat-block-title">🍿 이 해의 영화관 Top 3</div>
-        ${topCinemas.length ? topCinemas.map(([name, cnt], i) => `
-          <div class="stat-row">
-            <span><span class="stat-rank">${i + 1}</span><span class="stat-name">${name}</span></span>
-            <span class="stat-count">${cnt}번</span>
-          </div>
-        `).join('') : '<div class="empty-stat">영화관 정보가 있는 기록이 없어요</div>'}
+        ${renderRankedStatRows(topCinemas, '번')}
       </div>
 
       <div class="stat-block">
         <div class="stat-block-title">🎇 특별관 관람 횟수 <span class="stat-block-note">(일반/리클라이너/컴포트 제외, 4DX 계열 합산)</span></div>
-        ${specialScreens.length ? specialScreens.map(([name, cnt], i) => `
-          <div class="stat-row">
-            <span><span class="stat-rank">${i + 1}</span><span class="stat-name">${name}</span></span>
-            <span class="stat-count">${cnt}번</span>
-          </div>
-        `).join('') : '<div class="empty-stat">특별관 관람 기록이 없어요</div>'}
+        ${renderRankedStatRows(specialScreens, '번')}
       </div>
 
       <div class="stat-block">
@@ -1471,13 +1567,13 @@
       ${mostExpensive ? `
       <div class="stat-block">
         <div class="stat-block-title">💸 가장 비쌌던 영화</div>
-        <div class="stat-row"><span class="stat-name">${mostExpensive.title}</span><span class="stat-count">${Number(mostExpensive.ticketPrice || 0).toLocaleString()}원</span></div>
+        <div class="stat-row-simple"><span class="stat-name">${mostExpensive.title}</span><span class="stat-count">${Number(mostExpensive.ticketPrice || 0).toLocaleString()}원</span></div>
       </div>` : ''}
 
       ${longestLog && computeLogMinutes(longestLog) > 0 ? `
       <div class="stat-block">
         <div class="stat-block-title">⏱ 가장 길었던 영화</div>
-        <div class="stat-row"><span class="stat-name">${longestLog.title}</span><span class="stat-count">${longestLog.duration || Math.floor(computeLogMinutes(longestLog)/60) + '시간 ' + (computeLogMinutes(longestLog)%60) + '분'}</span></div>
+        <div class="stat-row-simple"><span class="stat-name">${longestLog.title}</span><span class="stat-count">${longestLog.duration || Math.floor(computeLogMinutes(longestLog)/60) + '시간 ' + (computeLogMinutes(longestLog)%60) + '분'}</span></div>
       </div>` : ''}
     `;
   };
@@ -1695,6 +1791,7 @@
     endTimeUserEdited = true;
     pendingMetaFetch = null;
     document.getElementById('actorsVal').value = record.actors || '';
+    document.getElementById('genreVal').value = record.genre || '';
     
     document.getElementById('movieMetaPreview').value = record.openDt ? `개봉: ${record.openDt} | 감독: ${record.director} | 출연: ${record.actors}` : '';
 
@@ -1782,6 +1879,7 @@ window.deleteCurrentRecord = async function() {
     document.getElementById('openDtVal').value = '';
     document.getElementById('directorVal').value = '';
     document.getElementById('actorsVal').value = '';
+    document.getElementById('genreVal').value = '';
     document.getElementById('posterUrlVal').value = DEFAULT_POSTER;
     document.getElementById('runtimeMinVal').value = '';
     endTimeUserEdited = false; // 새 기록이니 자동계산이 다시 작동하게 초기화
@@ -1910,6 +2008,7 @@ window.deleteCurrentRecord = async function() {
     document.getElementById('movieMetaPreview').value = `조회 중... (개봉: ${openDt} | 감독: ${director})`;
 
     let actors = '정보 없음';
+    let genre = '';
     let posterUrl = DEFAULT_POSTER;
 
     let targetYear = prodYear || '';
@@ -1953,6 +2052,12 @@ window.deleteCurrentRecord = async function() {
           const actorList = movieInfo?.actors || [];
           if (actorList.length > 0) {
             actors = actorList.slice(0, 3).map(a => a.peopleNm).join(', ');
+          }
+          // 장르도 이 응답에 같이 들어있어서(genres), 별도 API 호출 없이 바로 가져다 씀.
+          // "이 달 많이 본 장르" 통계에 씀.
+          const genreList = movieInfo?.genres || [];
+          if (genreList.length > 0) {
+            genre = genreList.map(g => g.genreNm).join(',');
           }
           // 상영시간(분)도 이 응답에 같이 들어있어서(showTm), 별도 API 호출 없이
           // 여기서 바로 가져다 씀 — TMDB(해외 DB)보다 국내 상영본 기준이라 더 정확함
@@ -2080,6 +2185,7 @@ window.deleteCurrentRecord = async function() {
     ]);
 
     document.getElementById('actorsVal').value = actors;
+    document.getElementById('genreVal').value = genre;
     document.getElementById('posterUrlVal').value = posterUrl;
     document.getElementById('movieMetaPreview').value = `개봉: ${openDt} | 감독: ${director} | 출연: ${actors}`;
 
@@ -2225,6 +2331,7 @@ window.deleteCurrentRecord = async function() {
       openDt: document.getElementById('openDtVal').value,
       director: document.getElementById('directorVal').value,
       actors: document.getElementById('actorsVal').value,
+      genre: document.getElementById('genreVal').value,
       poster: document.getElementById('posterUrlVal').value.trim() || DEFAULT_POSTER,
       createdAt: editId ? (movieLogs.find(l => l.id === editId)?.createdAt || Date.now()) : Date.now()
     };
