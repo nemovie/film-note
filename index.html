@@ -1422,11 +1422,11 @@
       const diff = thisMonthLogs.length - lastMonthLogs.length;
       let diffLine;
       if (diff > 0) {
-        diffLine = `지난달보다 <b class="summary-highlight">${diff}편</b> 더 많이 보셨네요! 🎉`;
+        diffLine = `지난달보다 <b class="summary-highlight">${diff}편</b> 더 많이 보셨네요! 🥳`;
       } else if (diff < 0) {
-        diffLine = `지난달보다 <b class="summary-highlight">${Math.abs(diff)}편</b> 적게 보셨어요`;
+        diffLine = `지난달보다 <b class="summary-highlight">${Math.abs(diff)}편</b> 적게 보셨어요 🥲`;
       } else {
-        diffLine = `지난달과 똑같은 편수를 보셨어요`;
+        diffLine = `지난달과 똑같은 편수를 보셨어요 😮`;
       }
 
       // 하루에 가장 많이 본 날
@@ -1435,7 +1435,7 @@
       const [busiestDate, busiestCount] = Object.entries(dayCounts).sort((a, b) => b[1] - a[1])[0];
       const busiestDay = parseInt(busiestDate.split('-')[2], 10);
       const busiestLine = busiestCount > 1
-        ? `가장 많이 보신 날은 <b class="summary-highlight">${month + 1}월 ${busiestDay}일</b>, <b class="summary-highlight">${busiestCount}편</b> 몰아보셨어요!`
+        ? `가장 많이 보신 날은 <b class="summary-highlight">${month + 1}월 ${busiestDay}일</b>, <b class="summary-highlight">${busiestCount}편</b> 몰아보셨어요! 🔥`
         : `이 달엔 하루에 여러 편 몰아 보신 날은 없었어요`;
 
       summaryEl.innerHTML = `${diffLine}<br>${busiestLine}`;
