@@ -2011,8 +2011,14 @@ window.deleteCurrentRecord = async function() {
     let genre = '';
     let posterUrl = DEFAULT_POSTER;
 
+    // 검색 결과 연도 매칭 기준(targetYear)은 '제작연도'를 최우선으로 써야 함.
+    // '개봉일'은 재개봉작의 경우 원래 제작연도와 전혀 다른 해(재개봉한 해)를
+    // 가리키기 때문. 예: 고다르의 <경멸>(1963)이 2026년에 재개봉하면 개봉일은
+    // "2026-07-15"가 되는데, 이걸 기준으로 연도를 맞추면 실제 1963년작 대신
+    // 하필 2026년에 더 가까운, 제목만 비슷한 다른 영화가 골라지는 오매칭이 남.
+    // 제작연도가 없을 때만 개봉일의 연도를 대신 씀(신작은 둘이 거의 같으므로 안전).
     let targetYear = prodYear || '';
-    if (openDt && openDt !== '정보 없음') {
+    if (!targetYear && openDt && openDt !== '정보 없음') {
       const yearMatch = openDt.match(/^\d{4}/);
       if (yearMatch) targetYear = yearMatch[0];
     }
@@ -2712,6 +2718,33 @@ if (calendarBody) {
     } else if (diffX < -threshold) {
       // 왼쪽에서 오른쪽으로 (이전달)
       window.changeMonth(-1);
+    }
+  }, { passive: true });
+}
+
+// 통계 팝업(이 달의 통계)에도 달력과 똑같은 방식으로 좌우 스와이프 달 이동 추가.
+// 연말결산 화면(statsRecapView)은 월이 아니라 연도 단위라 스와이프 대상에서 제외 —
+// statsMainView가 실제로 화면에 보일 때만 동작하게 함.
+const statsMainView = document.getElementById('statsMainView');
+if (statsMainView) {
+  let statsStartX = 0;
+  let statsEndX = 0;
+
+  statsMainView.addEventListener('touchstart', (e) => {
+    statsStartX = e.touches[0].clientX;
+  }, { passive: true });
+
+  statsMainView.addEventListener('touchend', (e) => {
+    // display:none이면(연말결산 보는 중이거나 닫혀있으면) 무시
+    if (statsMainView.offsetParent === null) return;
+    statsEndX = e.changedTouches[0].clientX;
+    const diffX = statsStartX - statsEndX;
+    const threshold = 50;
+
+    if (diffX > threshold) {
+      window.changeStatsMonth(1);  // 다음 달
+    } else if (diffX < -threshold) {
+      window.changeStatsMonth(-1); // 이전 달
     }
   }, { passive: true });
 }
