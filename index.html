@@ -2026,12 +2026,36 @@ window.deleteCurrentRecord = async function() {
     // TMDB/KMDB 검색 결과가 실제로 찾는 영화가 맞는지 검증할 때 쓰는 헬퍼.
     // 공백/특수문자/HTML태그를 다 지우고 비교해서, 사소한 표기 차이는 무시하되
     // 완전히 다른 제목(예: 킹스맨 vs 시크릿 에이전트)은 걸러냄.
-    const normalizeForMatch = (str) => (str || '').replace(/<[^>]+>/g, '').replace(/[^a-zA-Z0-9가-힣]/g, '').toLowerCase();
+    const normalizeForMatch = (str) => {
+      let s = (str || '').replace(/<[^>]+>/g, '');
+      // 로마 숫자(II, III, IV...)와 아라비아 숫자(2, 3, 4...) 표기가 소스마다 달라서
+      // (KOFIC "건담 III" vs TMDB "건담 3") 제목이 안 겹치는 걸 막기 위해 통일함
+      const romanMap = [
+        [/\bX\b/gi, '10'], [/\bIX\b/gi, '9'], [/\bVIII\b/gi, '8'], [/\bVII\b/gi, '7'],
+        [/\bVI\b/gi, '6'], [/\bV\b/gi, '5'], [/\bIV\b/gi, '4'], [/\bIII\b/gi, '3'],
+        [/\bII\b/gi, '2']
+      ];
+      romanMap.forEach(([re, num]) => { s = s.replace(re, num); });
+      // 유니코드 로마 숫자 기호(Ⅰ~Ⅹ, 씨네21 등 일부 사이트가 이 문자를 씀)도 함께 변환
+      const unicodeRoman = { 'Ⅰ':'1','Ⅱ':'2','Ⅲ':'3','Ⅳ':'4','Ⅴ':'5','Ⅵ':'6','Ⅶ':'7','Ⅷ':'8','Ⅸ':'9','Ⅹ':'10' };
+      s = s.replace(/[Ⅰ-Ⅹ]/g, ch => unicodeRoman[ch] || ch);
+      return s.replace(/[^a-zA-Z0-9가-힣]/g, '').toLowerCase();
+    };
     const isTitleLikelyMatch = (candidateTitle, searchTitle) => {
       const a = normalizeForMatch(candidateTitle);
       const b = normalizeForMatch(searchTitle);
       if (!a || !b) return false;
-      return a.includes(b) || b.includes(a);
+      if (a.includes(b) || b.includes(a)) return true;
+
+      // 재개봉하면서 부제가 통째로 바뀌는 경우가 있음
+      // (예: <해후의 우주> -> 2026년 재개봉 시 <만남의 우주>로 개칭).
+      // 이럴 땐 완전 포함 관계가 아니어도, 앞부분(시리즈명+숫자 등)이 충분히
+      // 길게 겹치면 같은 작품일 가능성이 높다고 보고 통과시킴. 우연의 일치를
+      // 줄이기 위해 겹치는 길이가 최소 4글자 이상 + 짧은 쪽의 절반 이상이어야 함.
+      let common = 0;
+      const minLen = Math.min(a.length, b.length);
+      while (common < minLen && a[common] === b[common]) common++;
+      return common >= 4 && common >= minLen * 0.5;
     };
 
     // [수정점 2] 아비정전 등 리마스터 영화 수거를 위한 영화 제목 정제함수
