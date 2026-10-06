@@ -2011,16 +2011,20 @@ window.deleteCurrentRecord = async function() {
     let genre = '';
     let posterUrl = DEFAULT_POSTER;
 
-    // 검색 결과 연도 매칭 기준(targetYear)은 '제작연도'를 최우선으로 써야 함.
-    // '개봉일'은 재개봉작의 경우 원래 제작연도와 전혀 다른 해(재개봉한 해)를
-    // 가리키기 때문. 예: 고다르의 <경멸>(1963)이 2026년에 재개봉하면 개봉일은
-    // "2026-07-15"가 되는데, 이걸 기준으로 연도를 맞추면 실제 1963년작 대신
-    // 하필 2026년에 더 가까운, 제목만 비슷한 다른 영화가 골라지는 오매칭이 남.
-    // 제작연도가 없을 때만 개봉일의 연도를 대신 씀(신작은 둘이 거의 같으므로 안전).
-    let targetYear = prodYear || '';
-    if (!targetYear && openDt && openDt !== '정보 없음') {
+    // 검색 결과 연도 매칭 기준은 '제작연도' 하나만 쓰면 안 됨.
+    // - 재개봉작(예: <경멸> 1963)은 제작연도가 맞고 개봉일은 틀림(재개봉한 해라서)
+    // - 국내 개봉이 해외보다 한참 늦는 영화(예: <퓨리어스> 해외 2026-06 / 국내 2026-10)는
+    //   반대로 개봉일 쪽이 TMDB의 release_date(보통 최초 해외 개봉일 기준)랑 맞고,
+    //   제작연도는 그거대로 또 다를 수 있음
+    // 어느 한쪽만 "정답"인 게 아니라 상황마다 다르므로, 제작연도와 개봉일 연도를
+    // 둘 다 후보로 들고 있다가 "둘 중 하나라도" 맞으면 정확히 일치한다고 인정함.
+    // (느슨하게 푸는 게 아니라 "믿을 수 있는 두 날짜 중 하나"로 한정하는 거라
+    //  전혀 다른 영화가 끼어들 위험은 그대로 낮게 유지됨)
+    const targetYears = new Set();
+    if (prodYear) targetYears.add(prodYear);
+    if (openDt && openDt !== '정보 없음') {
       const yearMatch = openDt.match(/^\d{4}/);
-      if (yearMatch) targetYear = yearMatch[0];
+      if (yearMatch) targetYears.add(yearMatch[0]);
     }
 
     // TMDB/KMDB 검색 결과가 실제로 찾는 영화가 맞는지 검증할 때 쓰는 헬퍼.
@@ -2122,16 +2126,21 @@ window.deleteCurrentRecord = async function() {
             return true;
           };
 
-          // 연도 조건 없이 후보들 중에서 targetYear와 가장 가까운 연도를 가진 걸 고름.
-          // targetYear를 모르면 그냥 첫 번째 후보.
+          // 연도 조건 없이 후보들 중에서 targetYears(제작연도/개봉연도) 중
+          // 아무거나와 가장 가까운 연도를 가진 걸 고름. targetYears가 비어있으면
+          // 그냥 첫 번째 후보.
           const pickClosestByYear = (candidates, getYear) => {
             if (!candidates.length) return null;
-            if (!targetYear) return candidates[0];
+            if (targetYears.size === 0) return candidates[0];
             let best = null, bestDiff = Infinity;
             candidates.forEach(c => {
               const y = parseInt(getYear(c), 10);
               if (!y) return;
-              const diff = Math.abs(y - parseInt(targetYear, 10));
+              let diff = Infinity;
+              targetYears.forEach(ty => {
+                const d = Math.abs(y - parseInt(ty, 10));
+                if (d < diff) diff = d;
+              });
               if (diff < bestDiff) { bestDiff = diff; best = c; }
             });
             return best || candidates[0];
@@ -2175,14 +2184,18 @@ window.deleteCurrentRecord = async function() {
           const kmdbPlausible = kAllResults.filter(r => isTitleLikelyMatch(r.title, movieNm));
 
           // ===================== 3. TMDB 안전장치: 제목+연도 정확히 일치 =====================
-          if (targetYear) {
-            const exact = tmdbPlausible.find(r => r.poster_path && r.release_date && r.release_date.startsWith(targetYear));
+          // (제작연도/개봉연도 중 하나라도 TMDB의 release_date 연도와 맞으면 인정)
+          if (targetYears.size > 0) {
+            const exact = tmdbPlausible.find(r =>
+              r.poster_path && r.release_date &&
+              Array.from(targetYears).some(ty => r.release_date.startsWith(ty))
+            );
             if (exact) posterUrl = `https://image.tmdb.org/t/p/w780${exact.poster_path}`;
           }
 
-          // ===================== 4. KMDB 안전장치: 제목+연도(제작연도) 정확히 일치 =====================
-          if (posterUrl === DEFAULT_POSTER && targetYear) {
-            const exact = kmdbPlausible.find(r => r.posters && r.prodYear === targetYear);
+          // ===================== 4. KMDB 안전장치: 제목+연도 정확히 일치 =====================
+          if (posterUrl === DEFAULT_POSTER && targetYears.size > 0) {
+            const exact = kmdbPlausible.find(r => r.posters && targetYears.has(r.prodYear));
             if (exact) await applyKmdbPoster(exact);
           }
 
